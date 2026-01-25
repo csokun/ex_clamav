@@ -24,6 +24,7 @@ static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL
 static ErlNifResourceType* ENGINE_RESOURCE_TYPE = NULL;
 
 static void engine_destructor(ErlNifEnv* env, void* arg) {
+    (void)env;
     engine_handle* handle = (engine_handle*)arg;
     if (handle && handle->engine) {
         cl_engine_free(handle->engine);
@@ -33,6 +34,8 @@ static void engine_destructor(ErlNifEnv* env, void* arg) {
 }
 
 static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
+    (void)priv_data;
+    (void)load_info;
     // Register resource type for engine handles
     ENGINE_RESOURCE_TYPE = enif_open_resource_type(
         env,
@@ -47,6 +50,7 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
 }
 
 static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info) {
+    (void)old_priv_data;
     return load(env, priv_data, load_info);
 }
 
@@ -116,6 +120,7 @@ static void init_scan_options(struct cl_scan_options* opts, unsigned int options
 
 // Initialize the ClamAV library
 static ERL_NIF_TERM init_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
     unsigned int init_flags;
 
     if (!enif_get_uint(env, argv[0], &init_flags)) {
@@ -132,6 +137,8 @@ static ERL_NIF_TERM init_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]
 
 // Create a new engine
 static ERL_NIF_TERM engine_new_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
+    (void)argv;
     struct cl_engine* engine = cl_engine_new();
 
     if (!engine) {
@@ -155,6 +162,7 @@ static ERL_NIF_TERM engine_new_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM 
 
 // Free an engine
 static ERL_NIF_TERM engine_free_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
     engine_handle* handle;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
@@ -167,6 +175,7 @@ static ERL_NIF_TERM engine_free_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
 // Load virus database
 static ERL_NIF_TERM load_database_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
     engine_handle* handle;
     char database_path[1024];
 
@@ -196,6 +205,8 @@ static ERL_NIF_TERM load_database_nif(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
 // Compile the engine
 static ERL_NIF_TERM compile_engine_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
+    (void)argv;
     engine_handle* handle;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
@@ -339,12 +350,15 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
 // Get ClamAV version
 static ERL_NIF_TERM get_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
+    (void)argv;
     const char* version = cl_retver();
     return enif_make_string(env, version, ERL_NIF_LATIN1);
 }
 
 // Get database version
 static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    (void)argc;
     engine_handle* handle;
     int err = 0;
     long long version;
@@ -364,17 +378,17 @@ static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL
 
 // NIF function definitions
 static ErlNifFunc nif_funcs[] = {
-    {"init", 1, init_nif},
-    {"engine_new", 0, engine_new_nif},
-    {"engine_free", 1, engine_free_nif},
-    {"load_database", 2, load_database_nif},
-    {"compile_engine", 1, compile_engine_nif},
-    {"scan_file", 2, scan_file_nif},
-    {"scan_file", 3, scan_file_nif},
-    {"scan_buffer", 2, scan_buffer_nif},
-    {"scan_buffer", 3, scan_buffer_nif},
-    {"get_version", 0, get_version_nif},
-    {"get_database_version", 1, get_database_version_nif}
+    {"init", 1, init_nif, 0},
+    {"engine_new", 0, engine_new_nif, 0},
+    {"engine_free", 1, engine_free_nif, 0},
+    {"load_database", 2, load_database_nif, 0},
+    {"compile_engine", 1, compile_engine_nif, 0},
+    {"scan_file", 2, scan_file_nif, 0},
+    {"scan_file", 3, scan_file_nif, 0},
+    {"scan_buffer", 2, scan_buffer_nif, 0},
+    {"scan_buffer", 3, scan_buffer_nif, 0},
+    {"get_version", 0, get_version_nif, 0},
+    {"get_database_version", 1, get_database_version_nif, 0}
 };
 
 ERL_NIF_INIT(Elixir.ClamavEx.Nif, nif_funcs, load, NULL, upgrade, NULL)
