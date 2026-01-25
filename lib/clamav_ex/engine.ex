@@ -20,7 +20,7 @@ defmodule ClamavEx.Engine do
   """
   @spec init(non_neg_integer()) :: :ok | {:error, String.t()}
   def init(flags \\ 1) do
-    ClamavEx.Nif.init(flags)
+    call_nif(:init, [flags])
   end
 
   @doc """
@@ -28,7 +28,7 @@ defmodule ClamavEx.Engine do
   """
   @spec load_database(t(), String.t()) :: {:ok, non_neg_integer()} | {:error, String.t()}
   def load_database(%__MODULE__{ref: ref}, database_path) do
-    ClamavEx.Nif.load_database(ref, database_path)
+    call_nif(:load_database, [ref, database_path])
   end
 
   @doc """
@@ -36,7 +36,7 @@ defmodule ClamavEx.Engine do
   """
   @spec compile(t()) :: :ok | {:error, String.t()}
   def compile(%__MODULE__{ref: ref}) do
-    ClamavEx.Nif.compile_engine(ref)
+    call_nif(:compile_engine, [ref])
   end
 
   @doc """
@@ -53,7 +53,7 @@ defmodule ClamavEx.Engine do
   @spec scan_file(t(), String.t(), non_neg_integer()) ::
           {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
   def scan_file(%__MODULE__{ref: ref}, file_path, options \\ 0) do
-    ClamavEx.Nif.scan_file(ref, file_path, options)
+    call_nif(:scan_file, [ref, file_path, options])
   end
 
   @doc """
@@ -62,7 +62,7 @@ defmodule ClamavEx.Engine do
   @spec scan_buffer(t(), binary(), non_neg_integer()) ::
           {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
   def scan_buffer(%__MODULE__{ref: ref}, buffer, options \\ 0) when is_binary(buffer) do
-    ClamavEx.Nif.scan_buffer(ref, buffer, options)
+    call_nif(:scan_buffer, [ref, buffer, options])
   end
 
   @doc """
@@ -70,7 +70,7 @@ defmodule ClamavEx.Engine do
   """
   @spec get_database_version(t()) :: non_neg_integer() | {:error, String.t()}
   def get_database_version(%__MODULE__{ref: ref}) do
-    ClamavEx.Nif.get_database_version(ref)
+    call_nif(:get_database_version, [ref])
   end
 
   @doc """
@@ -80,7 +80,7 @@ defmodule ClamavEx.Engine do
   """
   @spec free(t()) :: :ok
   def free(%__MODULE__{ref: ref}) do
-    ClamavEx.Nif.engine_free(ref)
+    call_nif(:engine_free, [ref])
   end
 
   @doc """
@@ -98,10 +98,14 @@ defmodule ClamavEx.Engine do
   Check if a buffer is clean.
   """
   @spec clean_buffer?(t(), binary()) :: boolean()
-  def clean_buffer?(engine, buffer) do
+  def clean_buffer?(engine, buffer) when is_binary(buffer) do
     case scan_buffer(engine, buffer) do
       {:ok, :clean} -> true
       _ -> false
     end
+  end
+
+  defp call_nif(function, args) when is_atom(function) and is_list(args) do
+    apply(ClamavEx.Nif, function, args)
   end
 end

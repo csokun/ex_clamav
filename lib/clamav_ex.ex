@@ -13,7 +13,7 @@ defmodule ClamavEx do
   """
   @spec version() :: String.t()
   def version do
-    Nif.get_version()
+    call_nif(:get_version, [])
   end
 
   @doc """
@@ -21,7 +21,7 @@ defmodule ClamavEx do
   """
   @spec new_engine() :: {:ok, Engine.t()} | {:error, String.t()}
   def new_engine do
-    case Nif.engine_new() do
+    case call_nif(:engine_new, []) do
       {:ok, ref} -> {:ok, %Engine{ref: ref}}
       {:error, reason} -> {:error, reason}
     end
@@ -75,6 +75,10 @@ defmodule ClamavEx do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp call_nif(function, args) when is_atom(function) and is_list(args) do
+    apply(Nif, function, args)
   end
 
   defp default_database_path do
