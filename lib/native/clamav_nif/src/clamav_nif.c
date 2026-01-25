@@ -59,6 +59,31 @@ static ERL_NIF_TERM make_clamav_error(ErlNifEnv* env, int error_code) {
     return make_error(env, error_msg);
 }
 
+static int get_c_string(ErlNifEnv* env, ERL_NIF_TERM term, char* buffer, size_t buffer_size) {
+    ErlNifBinary bin;
+
+    if (buffer_size == 0) {
+        return 0;
+    }
+
+    if (enif_inspect_binary(env, term, &bin)) {
+        if (bin.size >= buffer_size) {
+            return 0;
+        }
+
+        memcpy(buffer, bin.data, bin.size);
+        buffer[bin.size] = '\0';
+        return 1;
+    }
+
+    int chars_written = enif_get_string(env, term, buffer, buffer_size, ERL_NIF_LATIN1);
+    if (chars_written > 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
 static void apply_legacy_flags(struct cl_scan_options* opts, unsigned int options_mask) {
     if (options_mask & 0x1) {
         opts->parse |= CL_SCAN_PARSE_ARCHIVE;
@@ -149,7 +174,7 @@ static ERL_NIF_TERM load_database_nif(ErlNifEnv* env, int argc, const ERL_NIF_TE
         return enif_make_badarg(env);
     }
 
-    if (!enif_get_string(env, argv[1], database_path, sizeof(database_path), ERL_NIF_LATIN1)) {
+    if (!get_c_string(env, argv[1], database_path, sizeof(database_path))) {
         return enif_make_badarg(env);
     }
 
@@ -204,7 +229,7 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
         return enif_make_badarg(env);
     }
 
-    if (!enif_get_string(env, argv[1], file_path, sizeof(file_path), ERL_NIF_LATIN1)) {
+    if (!get_c_string(env, argv[1], file_path, sizeof(file_path))) {
         return enif_make_badarg(env);
     }
 
