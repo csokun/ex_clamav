@@ -59,6 +59,36 @@ static ERL_NIF_TERM make_clamav_error(ErlNifEnv* env, int error_code) {
     return make_error(env, error_msg);
 }
 
+static void apply_legacy_flags(struct cl_scan_options* opts, unsigned int options_mask) {
+    if (options_mask & 0x1) {
+        opts->parse |= CL_SCAN_PARSE_ARCHIVE;
+    }
+    if (options_mask & 0x2) {
+        opts->parse |= CL_SCAN_PARSE_MAIL;
+    }
+    if (options_mask & 0x4) {
+        opts->parse |= CL_SCAN_PARSE_OLE2;
+    }
+    if (options_mask & 0x8) {
+        opts->heuristic |= CL_SCAN_HEURISTIC_BROKEN;
+    }
+}
+
+static void init_scan_options(struct cl_scan_options* opts, unsigned int options_mask) {
+    memset(opts, 0, sizeof(*opts));
+
+    unsigned int general_bits = options_mask &
+        (CL_SCAN_GENERAL_ALLMATCHES |
+         CL_SCAN_GENERAL_COLLECT_METADATA |
+         CL_SCAN_GENERAL_HEURISTICS |
+         CL_SCAN_GENERAL_HEURISTIC_PRECEDENCE |
+         CL_SCAN_GENERAL_UNPRIVILEGED);
+
+    opts->general = general_bits;
+
+    apply_legacy_flags(opts, options_mask);
+}
+
 // Initialize the ClamAV library
 static ERL_NIF_TERM init_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     unsigned int init_flags;
@@ -164,9 +194,11 @@ static ERL_NIF_TERM compile_engine_nif(ErlNifEnv* env, int argc, const ERL_NIF_T
 static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     engine_handle* handle;
     char file_path[1024];
-    char virus_name[1024];
+    const char* virus_name = NULL;
     unsigned long int scanned = 0;
-    unsigned int options = 0;
+    unsigned int options_mask = 0;
+    struct cl_scan_options scan_opts;
+    struct cl_scan_options* scan_opts_ptr = NULL;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
@@ -176,16 +208,23 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
         return enif_make_badarg(env);
     }
 
-    if (argc > 2 && !enif_get_uint(env, argv[2], &options)) {
-        return enif_make_badarg(env);
+    if (argc > 2) {
+        if (!enif_get_uint(env, argv[2], &options_mask)) {
+            return enif_make_badarg(env);
+        }
+    }
+
+    if (options_mask != 0) {
+        init_scan_options(&scan_opts, options_mask);
+        scan_opts_ptr = &scan_opts;
     }
 
     int ret = cl_scanfile(
         file_path,
-        &virus_name[0],
+        &virus_name,
         &scanned,
         handle->engine,
-        options
+        scan_opts_ptr
     );
 
     switch (ret) {
@@ -200,7 +239,7 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
                 env,
                 enif_make_atom(env, "ok"),
                 enif_make_atom(env, "virus"),
-                enif_make_string(env, virus_name, ERL_NIF_LATIN1)
+                enif_make_string(env, virus_name ? virus_name : "", ERL_NIF_LATIN1)
             );
         default:
             return make_clamav_error(env, ret);
@@ -211,9 +250,12 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     engine_handle* handle;
     ErlNifBinary buffer;
-    char virus_name[1024];
+    const char* virus_name = NULL;
     unsigned long int scanned = 0;
-    unsigned int options = 0;
+    unsigned int options_mask = 0;
+    struct cl_scan_options scan_opts;
+    struct cl_scan_options* scan_opts_ptr = NULL;
+    cl_fmap_t* map;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
@@ -223,18 +265,33 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         return enif_make_badarg(env);
     }
 
-    if (argc > 2 && !enif_get_uint(env, argv[2], &options)) {
-        return enif_make_badarg(env);
+    if (argc > 2) {
+        if (!enif_get_uint(env, argv[2], &options_mask)) {
+            return enif_make_badarg(env);
+        }
     }
 
-    int ret = cl_scanjit(
-        buffer.data,
-        buffer.size,
-        &virus_name[0],
+    if (options_mask != 0) {
+        init_scan_options(&scan_opts, options_mask);
+        scan_opts_ptr = &scan_opts;
+    }
+
+    map = cl_fmap_open_memory(buffer.data, buffer.size);
+    if (!map) {
+        return make_error(env, "Failed to create fmap");
+    }
+
+    int ret = cl_scanmap_callback(
+        map,
+        NULL,
+        &virus_name,
         &scanned,
         handle->engine,
-        options
+        scan_opts_ptr,
+        NULL
     );
+
+    cl_fmap_close(map);
 
     switch (ret) {
         case CL_CLEAN:
@@ -248,7 +305,7 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
                 env,
                 enif_make_atom(env, "ok"),
                 enif_make_atom(env, "virus"),
-                enif_make_string(env, virus_name, ERL_NIF_LATIN1)
+                enif_make_string(env, virus_name ? virus_name : "", ERL_NIF_LATIN1)
             );
         default:
             return make_clamav_error(env, ret);
@@ -264,19 +321,20 @@ static ERL_NIF_TERM get_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 // Get database version
 static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     engine_handle* handle;
-    unsigned int version;
+    int err = 0;
+    long long version;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
     }
 
-    int ret = cl_engine_get_num(handle->engine, CL_ENGINE_DB_VERSION, &version, NULL);
+    version = cl_engine_get_num(handle->engine, CL_ENGINE_DB_VERSION, &err);
 
-    if (ret != CL_SUCCESS) {
-        return make_clamav_error(env, ret);
+    if (err != CL_SUCCESS) {
+        return make_clamav_error(env, err);
     }
 
-    return enif_make_ulong(env, version);
+    return enif_make_ulong(env, (unsigned long)version);
 }
 
 // NIF function definitions
