@@ -1,12 +1,12 @@
-defmodule ClamavEx do
+defmodule ExClamav do
   @moduledoc """
   High-level ClamAV interface for Elixir.
 
   This module provides a safe and convenient API for virus scanning using ClamAV.
   """
 
-  alias ClamavEx.Nif
-  alias ClamavEx.Engine
+  alias ExClamav.Nif
+  alias ExClamav.Engine
 
   @doc """
   Get the ClamAV library version.

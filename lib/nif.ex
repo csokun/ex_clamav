@@ -1,4 +1,4 @@
-defmodule ClamavEx.Nif do
+defmodule ExClamav.Nif do
   @moduledoc """
   NIF interface to libclamav.
 
@@ -8,7 +8,7 @@ defmodule ClamavEx.Nif do
   @on_load :load_nifs
 
   def load_nifs do
-    path = :filename.join(:code.priv_dir(:clamav_ex), ~c"clamav_nif")
+    path = :filename.join(:code.priv_dir(:ex_clamav), ~c"clamav_nif")
 
     case :erlang.load_nif(path, 0) do
       :ok -> :ok

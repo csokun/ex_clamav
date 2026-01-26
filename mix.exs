@@ -1,9 +1,9 @@
-defmodule ClamavEx.MixProject do
+defmodule ExClamav.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :clamav_ex,
+      app: :ex_clamav,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -31,11 +31,11 @@ defmodule ClamavEx.MixProject do
 
   defp package do
     [
-      name: "clamav_ex",
+      name: "ex_clamav",
       files: ["lib", "native", "mix.exs", "README.md", "Makefile"],
       maintainers: ["Sokun Chorn"],
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/csokun/clamav_ex"}
+      links: %{"GitHub" => "https://github.com/csokun/ex_clamav"}
     ]
   end
 end

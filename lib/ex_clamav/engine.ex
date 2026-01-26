@@ -1,4 +1,4 @@
-defmodule ClamavEx.Engine do
+defmodule ExClamav.Engine do
   @moduledoc """
   Engine struct and operations for ClamAV scanning.
 
@@ -118,6 +118,6 @@ defmodule ClamavEx.Engine do
   defp normalize_virus_name(_), do: ""
 
   defp call_nif(function, args) when is_atom(function) and is_list(args) do
-    apply(ClamavEx.Nif, function, args)
+    apply(ExClamav.Nif, function, args)
   end
 end

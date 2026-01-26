@@ -1,11 +1,11 @@
-defmodule ClamavExEngineTest do
+defmodule ExClamavEngineTest do
   use ExUnit.Case, async: false
 
-  alias ClamavEx.Engine
+  alias ExClamav.Engine
 
   setup_all do
     Engine.init()
-    {:ok, engine} = ClamavEx.new_engine()
+    {:ok, engine} = ExClamav.new_engine()
 
     on_exit(fn ->
       Engine.free(engine)
@@ -22,7 +22,7 @@ defmodule ClamavExEngineTest do
 
   test "returns an error tuple when a file is missing", %{engine: engine} do
     tmp_path =
-      Path.join(System.tmp_dir!(), "clamav_ex_missing_file_#{System.unique_integer([:positive])}")
+      Path.join(System.tmp_dir!(), "ex_clamav_missing_file_#{System.unique_integer([:positive])}")
 
     File.rm(tmp_path)
 
@@ -31,7 +31,7 @@ defmodule ClamavExEngineTest do
 
   test "detects EICAR test virus string in a file", %{engine: engine} do
     tmp_path =
-      Path.join(System.tmp_dir!(), "clamav_ex_eicar_test_#{System.unique_integer([:positive])}")
+      Path.join(System.tmp_dir!(), "ex_clamav_eicar_test_#{System.unique_integer([:positive])}")
 
     eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
@@ -44,7 +44,7 @@ defmodule ClamavExEngineTest do
 
   test "returns clean when scanning a clean file", %{engine: engine} do
     tmp_path =
-      Path.join(System.tmp_dir!(), "clamav_ex_clean_file_#{System.unique_integer([:positive])}")
+      Path.join(System.tmp_dir!(), "ex_clamav_clean_file_#{System.unique_integer([:positive])}")
 
     File.write!(tmp_path, "This is a clean file with no viruses.")
 

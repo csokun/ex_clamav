@@ -1,8 +1,8 @@
-defmodule ClamavEx.ClamavGenServerTest do
+defmodule ExClamav.ClamavGenServerTest do
   use ExUnit.Case, async: false
 
-  alias ClamavEx.ClamavGenServer
-  alias ClamavEx.Engine
+  alias ExClamav.ClamavGenServer
+  alias ExClamav.Engine
 
   @moduletag :tmp_dir
 

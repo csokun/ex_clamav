@@ -1,4 +1,4 @@
-defmodule ClamavEx.ClamavGenServer do
+defmodule ExClamav.ClamavGenServer do
   @moduledoc """
   A `GenServer` wrapper around a long-lived ClamAV engine.
 
@@ -16,7 +16,7 @@ defmodule ClamavEx.ClamavGenServer do
 
   use GenServer
 
-  alias ClamavEx.Engine
+  alias ExClamav.Engine
 
   defstruct [:engine, scan_options: 0]
 
@@ -96,7 +96,7 @@ defmodule ClamavEx.ClamavGenServer do
     database_path = Keyword.get(opts, :database_path)
     scan_options = Keyword.get(opts, :scan_options, 0)
 
-    case ClamavEx.new_engine_with_database(database_path) do
+    case ExClamav.new_engine_with_database(database_path) do
       {:ok, engine} ->
         state = %__MODULE__{engine: engine, scan_options: scan_options}
         {:ok, state}

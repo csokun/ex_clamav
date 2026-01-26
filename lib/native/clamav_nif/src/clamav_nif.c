@@ -383,4 +383,4 @@ static ErlNifFunc nif_funcs[] = {
     {"get_database_version", 1, get_database_version_nif, 0}
 };
 
-ERL_NIF_INIT(Elixir.ClamavEx.Nif, nif_funcs, load, NULL, upgrade, NULL)
+ERL_NIF_INIT(Elixir.ExClamav.Nif, nif_funcs, load, NULL, upgrade, NULL)
