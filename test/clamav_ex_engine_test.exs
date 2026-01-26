@@ -1,0 +1,55 @@
+defmodule ClamavExEngineTest do
+  use ExUnit.Case, async: false
+
+  alias ClamavEx.Engine
+
+  setup_all do
+    Engine.init()
+    {:ok, engine} = ClamavEx.new_engine()
+
+    on_exit(fn ->
+      Engine.free(engine)
+    end)
+
+    {:ok, _} = Engine.load_database(engine)
+    :ok = Engine.compile(engine)
+    {:ok, engine: engine}
+  end
+
+  test "creates and frees an engine resource", %{engine: %{ref: ref}} do
+    assert is_reference(ref)
+  end
+
+  test "returns an error tuple when a file is missing", %{engine: engine} do
+    tmp_path =
+      Path.join(System.tmp_dir!(), "clamav_ex_missing_file_#{System.unique_integer([:positive])}")
+
+    File.rm(tmp_path)
+
+    assert {:error, "Can't open file or directory"} = Engine.scan_file(engine, tmp_path)
+  end
+
+  test "detects EICAR test virus string in a file", %{engine: engine} do
+    tmp_path =
+      Path.join(System.tmp_dir!(), "clamav_ex_eicar_test_#{System.unique_integer([:positive])}")
+
+    eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+    File.write!(tmp_path, eicar)
+
+    assert {:virus, "Eicar-Test-Signature"} = Engine.scan_file(engine, tmp_path)
+
+    File.rm!(tmp_path)
+  end
+
+  test "returns clean when scanning a clean file", %{engine: engine} do
+    tmp_path =
+      Path.join(System.tmp_dir!(), "clamav_ex_clean_file_#{System.unique_integer([:positive])}")
+
+    File.write!(tmp_path, "This is a clean file with no viruses.")
+
+    assert {:ok, :clean} = Engine.scan_file(engine, tmp_path)
+
+    File.rm!(tmp_path)
+  end
+end

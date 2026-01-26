@@ -27,7 +27,7 @@ defmodule ClamavEx.Engine do
   Load virus database into the engine.
   """
   @spec load_database(t(), String.t()) :: {:ok, non_neg_integer()} | {:error, String.t()}
-  def load_database(%__MODULE__{ref: ref}, database_path) do
+  def load_database(%__MODULE__{ref: ref}, database_path \\ "/var/lib/clamav") do
     call_nif(:load_database, [ref, database_path])
   end
 
@@ -51,18 +51,26 @@ defmodule ClamavEx.Engine do
     - etc. (see ClamAV documentation)
   """
   @spec scan_file(t(), String.t(), non_neg_integer()) ::
-          {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
+          {:ok, :clean} | {:virus, String.t()} | {:error, String.t()}
   def scan_file(%__MODULE__{ref: ref}, file_path, options \\ 0) do
-    call_nif(:scan_file, [ref, file_path, options])
+    case call_nif(:scan_file, [ref, file_path, options]) do
+      {:ok, :clean} = clean -> clean
+      {:ok, :virus, name} -> {:virus, normalize_virus_name(name)}
+      {:error, reason} -> {:error, IO.chardata_to_string(reason)}
+    end
   end
 
   @doc """
   Scan binary data for viruses.
   """
   @spec scan_buffer(t(), binary(), non_neg_integer()) ::
-          {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
+          {:ok, :clean} | {:virus, String.t()} | {:error, String.t()}
   def scan_buffer(%__MODULE__{ref: ref}, buffer, options \\ 0) when is_binary(buffer) do
-    call_nif(:scan_buffer, [ref, buffer, options])
+    case call_nif(:scan_buffer, [ref, buffer, options]) do
+      {:ok, :clean} = clean -> clean
+      {:ok, :virus, name} -> {:virus, normalize_virus_name(name)}
+      other -> other
+    end
   end
 
   @doc """
@@ -104,6 +112,10 @@ defmodule ClamavEx.Engine do
       _ -> false
     end
   end
+
+  defp normalize_virus_name(name) when is_binary(name), do: name
+  defp normalize_virus_name(name) when is_list(name), do: IO.chardata_to_string(name)
+  defp normalize_virus_name(_), do: ""
 
   defp call_nif(function, args) when is_atom(function) and is_list(args) do
     apply(ClamavEx.Nif, function, args)

@@ -20,12 +20,7 @@ defmodule ClamavEx do
   Create a new engine with default settings.
   """
   @spec new_engine() :: {:ok, Engine.t()} | {:error, String.t()}
-  def new_engine do
-    case call_nif(:engine_new, []) do
-      {:ok, ref} -> {:ok, %Engine{ref: ref}}
-      {:error, reason} -> {:error, reason}
-    end
-  end
+  def new_engine, do: create_engine()
 
   @doc """
   Create and initialize a new engine with a virus database.
@@ -35,13 +30,12 @@ defmodule ClamavEx do
   """
   @spec new_engine_with_database(String.t() | nil) :: {:ok, Engine.t()} | {:error, String.t()}
   def new_engine_with_database(database_path \\ nil) do
-    with {:ok, engine} <- new_engine(),
-         {:ok, _signatures} <-
-           Engine.load_database(engine, database_path || default_database_path()),
-         :ok <- Engine.compile(engine) do
+    with {:ok, engine} <- create_engine(),
+         :ok <- initialize_engine(engine, database_path) do
       {:ok, engine}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -64,7 +58,7 @@ defmodule ClamavEx do
   @doc """
   Scan binary data using a temporary engine.
   """
-  @spec scan_buffer(binary()) :: {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
+  @spec scan_buffer(binary()) :: {:ok, :clean} | {:virus, String.t()} | {:error, String.t()}
   def scan_buffer(buffer) when is_binary(buffer) do
     case new_engine_with_database() do
       {:ok, engine} ->
@@ -74,6 +68,26 @@ defmodule ClamavEx do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp create_engine do
+    case call_nif(:engine_new, []) do
+      {:ok, ref} -> {:ok, %Engine{ref: ref}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp initialize_engine(engine, database_path) do
+    path = database_path || default_database_path()
+
+    with {:ok, _signatures} <- Engine.load_database(engine, path),
+         :ok <- Engine.compile(engine) do
+      :ok
+    else
+      {:error, _reason} = error ->
+        Engine.free(engine)
+        error
     end
   end
 

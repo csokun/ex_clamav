@@ -234,7 +234,6 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     unsigned long int scanned = 0;
     unsigned int options_mask = 0;
     struct cl_scan_options scan_opts;
-    struct cl_scan_options* scan_opts_ptr = NULL;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
@@ -250,17 +249,14 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
         }
     }
 
-    if (options_mask != 0) {
-        init_scan_options(&scan_opts, options_mask);
-        scan_opts_ptr = &scan_opts;
-    }
+    init_scan_options(&scan_opts, options_mask);
 
     int ret = cl_scanfile(
         file_path,
         &virus_name,
         &scanned,
         handle->engine,
-        scan_opts_ptr
+        &scan_opts
     );
 
     switch (ret) {
@@ -290,7 +286,6 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
     unsigned long int scanned = 0;
     unsigned int options_mask = 0;
     struct cl_scan_options scan_opts;
-    struct cl_scan_options* scan_opts_ptr = NULL;
     cl_fmap_t* map;
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
@@ -307,10 +302,7 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         }
     }
 
-    if (options_mask != 0) {
-        init_scan_options(&scan_opts, options_mask);
-        scan_opts_ptr = &scan_opts;
-    }
+    init_scan_options(&scan_opts, options_mask);
 
     map = cl_fmap_open_memory(buffer.data, buffer.size);
     if (!map) {
@@ -323,7 +315,7 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         &virus_name,
         &scanned,
         handle->engine,
-        scan_opts_ptr,
+        &scan_opts,
         NULL
     );
 
