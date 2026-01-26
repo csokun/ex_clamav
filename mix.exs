@@ -45,7 +45,7 @@ defmodule ExClamav.MixProject do
       name: "ex_clamav",
       files: ["lib", "mix.exs", "README.md", "Makefile"],
       maintainers: ["Sokun Chorn"],
-      licenses: ["MIT"],
+      licenses: ["GNU v2"],
       links: %{"GitHub" => "https://github.com/csokun/ex_clamav"}
     ]
   end
