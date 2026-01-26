@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-
+    tags-ignore:
+      - "v*"
 jobs:
   test:
     runs-on: ubuntu-latest

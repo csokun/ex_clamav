@@ -14,7 +14,10 @@ defmodule ExClamav.MixProject do
       make_targets: ["all"],
       make_clean: ["clean"],
       deps: deps(),
+
+      # Hex
       package: package(),
+      description: "Elixir wrapper for ClamAV",
 
       # Docs
       name: "ExClamav",
