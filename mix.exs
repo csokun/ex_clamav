@@ -1,17 +1,24 @@
 defmodule ExClamav.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+  @repo_url "https://github.com/csokun/ex_clamav"
+
   def project do
     [
       app: :ex_clamav,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       compilers: [:elixir_make] ++ Mix.compilers(),
       make_targets: ["all"],
       make_clean: ["clean"],
       deps: deps(),
-      package: package()
+      package: package(),
+
+      # Docs
+      name: "ExClamav",
+      docs: &docs/0
     ]
   end
 
@@ -25,7 +32,8 @@ defmodule ExClamav.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:elixir_make, "~> 0.9.0", runtime: false}
+      {:elixir_make, "~> 0.9.0", runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
 
@@ -36,6 +44,16 @@ defmodule ExClamav.MixProject do
       maintainers: ["Sokun Chorn"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/csokun/ex_clamav"}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      source_url: @repo_url,
+      extras: ["README.md"],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
   end
 end

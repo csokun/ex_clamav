@@ -1,8 +1,8 @@
 # ExClamav
 
-[![CI](https://github.com/csokun/ex_clamav/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/csokun/ex_clamav/actions/workflows/ci.yml)
+[![main](https://github.com/csokun/ex_clamav/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/csokun/ex_clamav/actions/workflows/ci.yml)
 
-ExClamav is an Elixir library providing native bindings to the ClamAV antivirus engine. It enables Elixir applications to scan files and data buffers for viruses and malware using ClamAV's robust detection capabilities.
+ExClamav is an Elixir library providing native bindings to the [ClamAV antivirus engine](https://docs.clamav.net/manual/Development/libclamav.html). It enables Elixir applications to scan files and data buffers for viruses and malware using ClamAV's robust detection capabilities.
 
 This library is intended for developers who need to integrate virus scanning into their Elixir projects, such as file upload services, content moderation pipelines, or any system where security and malware detection are required. ExClamav offers both low-level access to the ClamAV engine and convenient helper functions for common scanning tasks.
 
