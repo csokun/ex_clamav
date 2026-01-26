@@ -1,7 +1,7 @@
 defmodule ExClamav.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @repo_url "https://github.com/csokun/ex_clamav"
 
   def project do
@@ -43,7 +43,7 @@ defmodule ExClamav.MixProject do
   defp package do
     [
       name: "ex_clamav",
-      files: ["lib", "native", "mix.exs", "README.md", "Makefile"],
+      files: ["lib", "mix.exs", "README.md", "Makefile"],
       maintainers: ["Sokun Chorn"],
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/csokun/ex_clamav"}

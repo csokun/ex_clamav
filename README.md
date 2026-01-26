@@ -14,7 +14,7 @@ by adding `ex_clamav` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ex_clamav, "~> 0.1.0"}
+    {:ex_clamav, "~> 0.1.1"}
   ]
 end
 ```
