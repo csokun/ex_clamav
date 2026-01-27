@@ -17,12 +17,6 @@ defmodule ExClamav do
   end
 
   @doc """
-  Create a new engine with default settings.
-  """
-  @spec new_engine() :: {:ok, Engine.t()} | {:error, String.t()}
-  def new_engine, do: create_engine()
-
-  @doc """
   Create and initialize a new engine with a virus database.
 
   ## Options
@@ -30,7 +24,7 @@ defmodule ExClamav do
   """
   @spec new_engine_with_database(String.t() | nil) :: {:ok, Engine.t()} | {:error, String.t()}
   def new_engine_with_database(database_path \\ nil) do
-    with {:ok, engine} <- create_engine(),
+    with {:ok, engine} <- Engine.new_engine(),
          :ok <- initialize_engine(engine, database_path) do
       {:ok, engine}
     else
@@ -40,43 +34,32 @@ defmodule ExClamav do
   end
 
   @doc """
-  Scan a file using a temporary engine.
+  Restart the engine by freeing the current engine and creating a new one with the given database.
+
+  ## Parameters
+    - `engine`: The current engine to free.
+    - `database_path`: Path to the virus database (default: system default)
+
+  ## Returns
+    - `{:ok, Engine.t()} | {:error, String.t()}`
   """
-  @spec scan_file(String.t()) :: {:ok, :clean} | {:ok, :virus, String.t()} | {:error, String.t()}
-  def scan_file(file_path) do
-    case new_engine_with_database() do
-      {:ok, engine} ->
-        result = Engine.scan_file(engine, file_path)
-        Engine.free(engine)
-        result
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+  @spec restart_engine(Engine.t(), String.t() | nil) :: {:ok, Engine.t()} | {:error, String.t()}
+  def restart_engine(engine, database_path \\ nil) do
+    Engine.free(engine)
+    new_engine_with_database(database_path)
   end
 
-  @doc """
-  Scan binary data using a temporary engine.
-  """
-  @spec scan_buffer(binary()) :: {:ok, :clean} | {:virus, String.t()} | {:error, String.t()}
-  def scan_buffer(buffer) when is_binary(buffer) do
-    case new_engine_with_database() do
-      {:ok, engine} ->
-        result = Engine.scan_buffer(engine, buffer)
-        Engine.free(engine)
-        result
+  defdelegate new_engine, to: Engine
+  defdelegate scan_file(engine, file_path, options \\ 0), to: Engine
+  defdelegate scan_buffer(engine, buffer, options \\ 0), to: Engine
+  defdelegate free(engine), to: Engine
+  defdelegate load_database(engine, database_path), to: Engine
+  defdelegate compile(engine), to: Engine
+  defdelegate get_database_version(engine), to: Engine
 
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp create_engine do
-    case call_nif(:engine_new, []) do
-      {:ok, ref} -> {:ok, %Engine{ref: ref}}
-      {:error, _reason} = error -> error
-    end
-  end
+  # ---------------------------------------------------------------------------
+  # Helper functions
+  # ---------------------------------------------------------------------------
 
   defp initialize_engine(engine, database_path) do
     path = database_path || default_database_path()

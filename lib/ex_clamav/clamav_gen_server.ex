@@ -18,23 +18,23 @@ defmodule ExClamav.ClamavGenServer do
 
   alias ExClamav.Engine
 
-  defstruct [:engine, scan_options: 0]
+  defstruct engine: nil, database_path: "/var/lib/clamav"
 
   @type t :: %__MODULE__{
-          engine: Engine.t(),
-          scan_options: non_neg_integer()
+          engine: Engine.t() | nil,
+          database_path: Path.t() | nil
         }
 
   @type option ::
           {:name, GenServer.name()}
           | {:database_path, Path.t() | nil}
-          | {:scan_options, non_neg_integer()}
+
+  @standard_scan_option 0
 
   @doc """
   Starts the server.
 
   * `:database_path` — overrides the default ClamAV database lookup path.
-  * `:scan_options` — bitmask of scan options to pass to ClamAV.
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -94,12 +94,18 @@ defmodule ExClamav.ClamavGenServer do
   @impl true
   def init(opts) do
     database_path = Keyword.get(opts, :database_path)
-    scan_options = Keyword.get(opts, :scan_options, 0)
 
-    case ExClamav.new_engine_with_database(database_path) do
+    # Initialize the default allocator (CL_INIT_DEFAULT)
+    ExClamav.Engine.init(1)
+
+    {:ok, %__MODULE__{engine: nil, database_path: database_path}, {:continue, :init}}
+  end
+
+  @impl true
+  def handle_continue(:init, state) do
+    case ExClamav.new_engine_with_database(state.database_path) do
       {:ok, engine} ->
-        state = %__MODULE__{engine: engine, scan_options: scan_options}
-        {:ok, state}
+        {:noreply, %{state | engine: engine}}
 
       {:error, reason} ->
         {:stop, {:failed_to_initialize_engine, reason}}
@@ -108,13 +114,13 @@ defmodule ExClamav.ClamavGenServer do
 
   @impl true
   def handle_call({:scan_file, file_path}, _from, %__MODULE__{} = state) do
-    reply = Engine.scan_file(state.engine, file_path, state.scan_options)
+    reply = Engine.scan_file(state.engine, file_path, @standard_scan_option)
     {:reply, reply, state}
   end
 
   @impl true
   def handle_call({:scan_buffer, buffer}, _from, %__MODULE__{} = state) do
-    reply = Engine.scan_buffer(state.engine, buffer, state.scan_options)
+    reply = Engine.scan_buffer(state.engine, buffer, @standard_scan_option)
     {:reply, reply, state}
   end
 

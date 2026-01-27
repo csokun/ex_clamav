@@ -24,6 +24,17 @@ defmodule ExClamav.Engine do
   end
 
   @doc """
+  Create a new engine with default settings.
+  """
+  @spec new_engine() :: {:ok, Engine.t()} | {:error, String.t()}
+  def new_engine() do
+    case call_nif(:engine_new, []) do
+      {:ok, ref} -> {:ok, %__MODULE__{ref: ref}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
   Load virus database into the engine.
   """
   @spec load_database(t(), String.t()) :: {:ok, non_neg_integer()} | {:error, String.t()}
