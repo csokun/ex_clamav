@@ -46,8 +46,16 @@ defmodule ExClamav.Engine do
   Compile the engine after loading the database.
   """
   @spec compile(t()) :: :ok | {:error, String.t()}
-  def compile(%__MODULE__{ref: ref}) do
-    call_nif(:compile_engine, [ref])
+  def compile(%__MODULE__{ref: ref} = engine) do
+    case call_nif(:compile_engine, [ref]) do
+      :ok ->
+        :ok
+
+      {:error, _reason} = error ->
+        # Free the engine memory on failure
+        free(engine)
+        error
+    end
   end
 
   @doc """
