@@ -61,7 +61,7 @@ jobs:
       url: https://hex.pm/packages/ex_clamav
     env:
       HEX_API_KEY: ${{ secrets.HEXPM_API_KEY }}
-      MIX_ENV: prod
+      MIX_ENV: dev
 
     steps:
       - name: Check out source
@@ -92,13 +92,7 @@ jobs:
             mix-${{ runner.os }}-
 
       - name: Install dependencies
-        run: mix deps.get --only prod
-
-      - name: Compile
-        run: mix compile
-
-      - name: Build release artifact
-        run: mix hex.build
+        run: mix deps.get
 
       - name: Publish package
         run: mix hex.publish --yes
