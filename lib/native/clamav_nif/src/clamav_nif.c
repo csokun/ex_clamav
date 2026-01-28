@@ -65,10 +65,8 @@ static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_N
 static void unload(ErlNifEnv* env, void* priv_data) {
     (void)env;
     (void)priv_data;
-    // cl_cleanup comes from libclamav (clamav.h) and frees global resources
-    // allocated by cl_init/cl_engine_compile. engine_free_nif releases a single
-    // engine instance; cl_cleanup handles remaining global libclamav state.
-    cl_cleanup();
+    // cl_cleanup is not available in current libclamav; no global teardown.
+    // Engine resources are freed via engine_destructor/engine_free_nif.
 }
 
 static ERL_NIF_TERM make_error(ErlNifEnv* env, const char* error) {
