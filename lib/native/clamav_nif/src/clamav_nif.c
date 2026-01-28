@@ -22,6 +22,7 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 static ERL_NIF_TERM get_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+static void unload(ErlNifEnv* env, void* priv_data);
 
 // Resource type handling
 static ErlNifResourceType* ENGINE_RESOURCE_TYPE = NULL;
@@ -59,6 +60,12 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
 static int upgrade(ErlNifEnv* env, void** priv_data, void** old_priv_data, ERL_NIF_TERM load_info) {
     (void)old_priv_data;
     return load(env, priv_data, load_info);
+}
+
+static void unload(ErlNifEnv* env, void* priv_data) {
+    (void)env;
+    (void)priv_data;
+    cl_cleanup();
 }
 
 static ERL_NIF_TERM make_error(ErlNifEnv* env, const char* error) {
@@ -423,4 +430,4 @@ static ErlNifFunc nif_funcs[] = {
     {"get_database_version", 1, get_database_version_nif, 0}
 };
 
-ERL_NIF_INIT(Elixir.ExClamav.Nif, nif_funcs, load, NULL, upgrade, NULL)
+ERL_NIF_INIT(Elixir.ExClamav.Nif, nif_funcs, load, NULL, upgrade, unload)
