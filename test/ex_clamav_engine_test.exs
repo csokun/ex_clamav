@@ -52,4 +52,35 @@ defmodule ExClamavEngineTest do
 
     File.rm!(tmp_path)
   end
+
+  describe "engine guard rails" do
+    test "scan_file errors when the database was never loaded" do
+      {:ok, engine} = ExClamav.new_engine()
+      tmp_path =
+        Path.join(System.tmp_dir!(), "ex_clamav_uninitialized_#{System.unique_integer([:positive])}")
+
+      File.write!(tmp_path, "guard-rail test")
+
+      assert {:error, "Engine not initialized with database"} = Engine.scan_file(engine, tmp_path)
+
+      File.rm!(tmp_path)
+      :ok = Engine.free(engine)
+    end
+
+    test "scan_file errors when the engine has already been freed" do
+      {:ok, engine} = ExClamav.new_engine()
+      :ok = Engine.free(engine)
+
+      tmp_path =
+        Path.join(System.tmp_dir!(), "ex_clamav_freed_handle_#{System.unique_integer([:positive])}")
+
+      File.write!(tmp_path, "guard-rail test")
+
+      assert {:error, "Engine resource is invalid or has been freed"} =
+               Engine.scan_file(engine, tmp_path)
+
+      File.rm!(tmp_path)
+    end
+  end
+
 end

@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stdio.h>
 
+#define ENGINE_INVALID_ERROR "Engine resource is invalid or has been freed"
+#define ENGINE_NOT_INITIALIZED_ERROR "Engine not initialized with database"
+
 // Resource type for engine
 typedef struct {
     struct cl_engine *engine;
@@ -45,6 +48,10 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info) {
         ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER,
         NULL
     );
+
+    if (ENGINE_RESOURCE_TYPE == NULL) {
+        return -1;
+    }
 
     return 0;
 }
@@ -169,7 +176,12 @@ static ERL_NIF_TERM engine_free_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
         return enif_make_badarg(env);
     }
 
-    // The destructor will be called automatically when the resource is garbage collected
+    if (handle->engine) {
+        cl_engine_free(handle->engine);
+        handle->engine = NULL;
+    }
+    handle->initialized = 0;
+
     return enif_make_atom(env, "ok");
 }
 
@@ -181,6 +193,10 @@ static ERL_NIF_TERM load_database_nif(ErlNifEnv* env, int argc, const ERL_NIF_TE
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
+    }
+
+    if (!handle->engine) {
+        return make_error(env, ENGINE_INVALID_ERROR);
     }
 
     if (!get_c_string(env, argv[1], database_path, sizeof(database_path))) {
@@ -213,8 +229,12 @@ static ERL_NIF_TERM compile_engine_nif(ErlNifEnv* env, int argc, const ERL_NIF_T
         return enif_make_badarg(env);
     }
 
+    if (!handle->engine) {
+        return make_error(env, ENGINE_INVALID_ERROR);
+    }
+
     if (!handle->initialized) {
-        return make_error(env, "Engine not initialized with database");
+        return make_error(env, ENGINE_NOT_INITIALIZED_ERROR);
     }
 
     int ret = cl_engine_compile(handle->engine);
@@ -237,6 +257,14 @@ static ERL_NIF_TERM scan_file_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
+    }
+
+    if (!handle->engine) {
+        return make_error(env, ENGINE_INVALID_ERROR);
+    }
+
+    if (!handle->initialized) {
+        return make_error(env, ENGINE_NOT_INITIALIZED_ERROR);
     }
 
     if (!get_c_string(env, argv[1], file_path, sizeof(file_path))) {
@@ -290,6 +318,14 @@ static ERL_NIF_TERM scan_buffer_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
+    }
+
+    if (!handle->engine) {
+        return make_error(env, ENGINE_INVALID_ERROR);
+    }
+
+    if (!handle->initialized) {
+        return make_error(env, ENGINE_NOT_INITIALIZED_ERROR);
     }
 
     if (!enif_inspect_binary(env, argv[1], &buffer)) {
@@ -357,6 +393,10 @@ static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL
 
     if (!enif_get_resource(env, argv[0], ENGINE_RESOURCE_TYPE, (void**)&handle)) {
         return enif_make_badarg(env);
+    }
+
+    if (!handle->engine) {
+        return make_error(env, ENGINE_INVALID_ERROR);
     }
 
     version = cl_engine_get_num(handle->engine, CL_ENGINE_DB_VERSION, &err);
