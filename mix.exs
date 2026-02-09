@@ -9,6 +9,7 @@ defmodule ExClamav.MixProject do
       app: :ex_clamav,
       version: @version,
       elixir: "~> 1.18",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       compilers: [:elixir_make] ++ Mix.compilers(),
       make_targets: ["all"],
@@ -24,6 +25,9 @@ defmodule ExClamav.MixProject do
       docs: &docs/0
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -55,7 +59,12 @@ defmodule ExClamav.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @repo_url,
-      extras: ["README.md"],
+      extra_section: "GUIDES",
+      formatters: ["html", "epub"],
+      extras: [
+        "guides/architecture.md",
+        "README.md"
+      ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
   end

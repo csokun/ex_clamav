@@ -12,22 +12,42 @@ defmodule ExClamav.ClamavGenServer do
   * Automatically loads and compiles the ClamAV database on boot.
   * Exposes synchronous `scan_file/2` and `scan_buffer/2` helpers.
   * Guarantees engine resources are released when the server terminates.
+  * Optionally subscribes to `ExClamav.DefinitionUpdater` and automatically
+    reloads the engine when virus definitions are updated.
+
+  ## Auto-Reload
+
+  Pass the `:auto_reload` option to subscribe to a running `DefinitionUpdater`:
+
+      ClamavGenServer.start_link(
+        auto_reload: true,                        # subscribe to DefinitionUpdater
+        updater: ExClamav.DefinitionUpdater       # which updater to subscribe to
+      )
+
+  When definitions are updated, the server will restart its engine with the
+  new database, ensuring scans always use the latest signatures.
   """
 
   use GenServer
 
   alias ExClamav.Engine
 
-  defstruct engine: nil, database_path: "/var/lib/clamav"
+  require Logger
+
+  defstruct engine: nil, database_path: "/var/lib/clamav", auto_reload: false, updater: nil
 
   @type t :: %__MODULE__{
           engine: Engine.t() | nil,
-          database_path: Path.t() | nil
+          database_path: Path.t() | nil,
+          auto_reload: boolean(),
+          updater: GenServer.server() | nil
         }
 
   @type option ::
           {:name, GenServer.name()}
           | {:database_path, Path.t() | nil}
+          | {:auto_reload, boolean()}
+          | {:updater, GenServer.server()}
 
   @standard_scan_option 0
 
@@ -35,6 +55,10 @@ defmodule ExClamav.ClamavGenServer do
   Starts the server.
 
   * `:database_path` — overrides the default ClamAV database lookup path.
+  * `:auto_reload`   — if `true`, subscribes to the definition updater and
+    reloads the engine when definitions change (default: `false`).
+  * `:updater`       — the `DefinitionUpdater` server to subscribe to
+    (default: `ExClamav.DefinitionUpdater`).
   """
   @spec start_link([option()]) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -94,15 +118,33 @@ defmodule ExClamav.ClamavGenServer do
   @impl true
   def init(opts) do
     database_path = Keyword.get(opts, :database_path)
+    auto_reload = Keyword.get(opts, :auto_reload, false)
+    updater = Keyword.get(opts, :updater, ExClamav.DefinitionUpdater)
 
     # Initialize the default allocator (CL_INIT_DEFAULT)
     ExClamav.Engine.init(1)
 
-    {:ok, %__MODULE__{engine: nil, database_path: database_path}, {:continue, :init}}
+    state = %__MODULE__{
+      engine: nil,
+      database_path: database_path,
+      auto_reload: auto_reload,
+      updater: updater
+    }
+
+    {:ok, state, {:continue, :init}}
   end
 
   @impl true
   def handle_continue(:init, state) do
+    # Subscribe to definition updates if auto_reload is enabled
+    if state.auto_reload do
+      ExClamav.DefinitionUpdater.subscribe(state.updater)
+
+      Logger.info(
+        "ClamavGenServer: subscribed to definition updates from #{inspect(state.updater)}"
+      )
+    end
+
     case ExClamav.new_engine_with_database(state.database_path) do
       {:ok, engine} ->
         {:noreply, %{state | engine: engine}}
@@ -125,9 +167,32 @@ defmodule ExClamav.ClamavGenServer do
   end
 
   @impl true
-  def terminate(_reason, %__MODULE__{engine: nil}) do
-    :ok
+  def handle_info({:clamav_definition_updated, metadata}, %__MODULE__{} = state) do
+    Logger.info("ClamavGenServer: definitions updated, reloading engine")
+    db_path = metadata[:database_path] || state.database_path
+
+    case ExClamav.restart_engine(state.engine, db_path) do
+      {:ok, new_engine} ->
+        Logger.info("ClamavGenServer: engine reloaded successfully")
+        {:noreply, %{state | engine: new_engine, database_path: db_path}}
+
+      {:error, reason} ->
+        Logger.error("ClamavGenServer: failed to reload engine — #{reason}")
+        {:noreply, state}
+    end
   end
+
+  def handle_info({:clamav_definition_update_failed, metadata}, state) do
+    Logger.warning("ClamavGenServer: definition update failed — #{inspect(metadata[:reason])}")
+    {:noreply, state}
+  end
+
+  def handle_info(_msg, state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def terminate(_reason, %__MODULE__{engine: nil}), do: :ok
 
   def terminate(_reason, %__MODULE__{engine: engine}) do
     Engine.free(engine)
