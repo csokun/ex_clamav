@@ -27,7 +27,6 @@ RUN mix local.hex --force && mix local.rebar --force
 # ---------------------------------------------------------------------------
 COPY lib/ /build/ex_clamav/lib/
 COPY mix.exs mix.lock Makefile /build/ex_clamav/
-COPY priv/ /build/ex_clamav/priv/
 
 # ---------------------------------------------------------------------------
 # Copy the server application
@@ -54,7 +53,7 @@ RUN mix release
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 ARG MIX_ENV=prod
 
@@ -73,7 +72,7 @@ ENV MIX_ENV=${MIX_ENV} \
 #   - tini: lightweight init for proper signal handling in containers
 #   - ca-certificates: for HTTPS connections (freshclam mirrors)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libclamav11 \
+    libclamav12 \
     clamav-freshclam \
     clamav \
     tini \
@@ -86,8 +85,8 @@ RUN groupadd --system clamav_server && \
     useradd --system --gid clamav_server --home /app --shell /bin/false clamav_server
 
 # Create required directories with proper ownership
-RUN mkdir -p /var/lib/clamav /data/uploads /app && \
-    chown -R clamav_server:clamav_server /var/lib/clamav /data/uploads /app
+RUN mkdir -p /var/lib/clamav /data/uploads /app /var/log/clamav && \
+    chown -R clamav_server:clamav_server /var/lib/clamav /data/uploads /app /var/log/clamav
 
 # Configure freshclam
 # The default freshclam.conf may need adjustment for container usage

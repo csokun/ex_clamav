@@ -266,36 +266,51 @@ curl -X POST http://localhost:4000/upload -F "file=@/tmp/eicar.txt"
 
 ## Docker
 
-### Build
+A `docker-compose.yml` is provided in `examples/ex_clamav_server/` that starts PostgreSQL and the server together.
 
-The Dockerfile must be built from the **repository root** since it needs both the `ex_clamav` library and the server application:
+### Build & Run
+
+```bash
+# From examples/ex_clamav_server/
+docker compose up --build
+```
+
+This will:
+1. Build the server image from the repository root (the build context points to `../../`)
+2. Start PostgreSQL 16 with a health check
+3. Wait for PostgreSQL to be healthy, then start the server (runs migrations automatically on boot)
+
+To run in the background:
+
+```bash
+docker compose up --build -d
+```
+
+To stop and remove containers:
+
+```bash
+docker compose down
+```
+
+To stop and also remove the named volumes (database data, virus definitions, uploads):
+
+```bash
+docker compose down -v
+```
+
+### Build Only
+
+If you only need to build the image without starting services:
+
+```bash
+docker compose build
+```
+
+Or build directly with `docker build` from the **repository root**:
 
 ```bash
 # From the repository root (clamav_ex/)
 docker build -f examples/ex_clamav_server/Dockerfile -t ex-clamav-server:latest .
-```
-
-### Run
-
-```bash
-# Start PostgreSQL
-docker run -d --name postgres \
-  -e POSTGRES_USER=ex_clamav_server \
-  -e POSTGRES_PASSWORD=changeme \
-  -e POSTGRES_DB=ex_clamav_server_prod \
-  -p 5432:5432 \
-  postgres:16
-
-# Start the server
-docker run -d --name ex-clamav-server \
-  -e DATABASE_URL="ecto://ex_clamav_server:changeme@host.docker.internal:5432/ex_clamav_server_prod" \
-  -e PORT=4000 \
-  -e CLAMAV_DB_PATH=/var/lib/clamav \
-  -e UPLOAD_PATH=/data/uploads \
-  -p 4000:4000 \
-  -v clamav-db:/var/lib/clamav \
-  -v uploads:/data/uploads \
-  ex-clamav-server:latest
 ```
 
 ### Environment Variables
@@ -320,23 +335,23 @@ docker run -d --name ex-clamav-server \
 The Docker entrypoint supports several commands:
 
 ```bash
-# Default: run migrations and start the server
-docker run ex-clamav-server:latest start
+# Default: run migrations and start the server (what docker compose up does)
+docker compose up
 
 # Start with IEx console attached
-docker run -it ex-clamav-server:latest start_iex
+docker compose run --rm ex-clamav-server start_iex
 
 # Run migrations only (useful as a Kubernetes Job)
-docker run ex-clamav-server:latest migrate
+docker compose run --rm ex-clamav-server migrate
 
 # Run freshclam only
-docker run ex-clamav-server:latest freshclam
+docker compose run --rm ex-clamav-server freshclam
 
 # Evaluate an Elixir expression
-docker run ex-clamav-server:latest eval "ExClamavServer.Release.migrate()"
+docker compose run --rm ex-clamav-server eval "ExClamavServer.Release.migrate()"
 
 # Connect a remote IEx console to a running instance
-docker exec -it <container> /app/bin/ex_clamav_server remote
+docker compose exec ex-clamav-server /app/bin/ex_clamav_server remote
 ```
 
 ## Kubernetes Deployment (EKS)

@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ex_clamav_server
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: ex_clamav_server_prod
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ex_clamav_server -d ex_clamav_server_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ex-clamav-server:
+    build:
+      context: ../../
+      dockerfile: examples/ex_clamav_server/Dockerfile
+    image: ex-clamav-server:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    environment:
+      DATABASE_URL: "ecto://ex_clamav_server:changeme@postgres:5432/ex_clamav_server_prod"
+      PORT: "4000"
+      CLAMAV_DB_PATH: /var/lib/clamav
+      UPLOAD_PATH: /data/uploads
+      CLAMAV_UPDATE_INTERVAL_HOURS: "1"
+      CLAMAV_UPDATE_ON_START: "true"
+    volumes:
+      - clamav-db:/var/lib/clamav
+      - uploads:/data/uploads
+
+volumes:
+  pgdata:
+  clamav-db:
+  uploads:
