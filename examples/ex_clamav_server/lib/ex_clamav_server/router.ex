@@ -177,7 +177,11 @@ defmodule ExClamavServer.Router do
 
   defp safe_clamav_version do
     try do
-      ExClamav.version()
+      case ExClamav.version() do
+        version when is_list(version) -> List.to_string(version)
+        version when is_binary(version) -> version
+        other -> inspect(other)
+      end
     rescue
       _ -> "unavailable"
     end

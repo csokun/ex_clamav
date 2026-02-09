@@ -230,7 +230,7 @@ curl http://localhost:4000/health
 sudo apt-get install -y libclamav-dev clamav clamav-freshclam
 
 # Download initial virus definitions
-sudo freshclam
+sudo freshclam --datadir=/tmp/ex_clamav_server_db
 
 # Navigate to the server directory
 cd examples/ex_clamav_server

@@ -10,6 +10,8 @@ defmodule ExClamav.DefinitionUpdater do
   * Pub/sub notification — any process can subscribe and receive messages
     when definitions are updated.
   * Manual trigger via `update_now/1` for on-demand refreshes.
+  * **Non-blocking** — freshclam runs in a background Task so the GenServer
+    remains responsive to subscribe/status/unsubscribe calls at all times.
 
   ## Notifications
 
@@ -71,7 +73,8 @@ defmodule ExClamav.DefinitionUpdater do
           subscriber_count: non_neg_integer(),
           last_update_at: DateTime.t() | nil,
           last_result: :updated | :up_to_date | {:error, String.t()} | nil,
-          fingerprint: fingerprint()
+          fingerprint: fingerprint(),
+          updating: boolean()
         }
 
   @type option ::
@@ -91,6 +94,7 @@ defmodule ExClamav.DefinitionUpdater do
     :last_update_at,
     :last_result,
     :run_on_start,
+    :update_task_ref,
     fingerprint: [],
     subscribers: %{}
   ]
@@ -167,10 +171,12 @@ defmodule ExClamav.DefinitionUpdater do
 
   This is asynchronous — the update runs in the background and subscribers
   are notified when it completes. Returns `:ok` immediately.
+
+  If an update is already in progress, returns `:already_updating`.
   """
-  @spec update_now(GenServer.server()) :: :ok
+  @spec update_now(GenServer.server()) :: :ok | :already_updating
   def update_now(server \\ __MODULE__) do
-    GenServer.cast(server, :update_now)
+    GenServer.call(server, :update_now)
   end
 
   @doc """
@@ -197,7 +203,8 @@ defmodule ExClamav.DefinitionUpdater do
       freshclam_path: freshclam_path,
       freshclam_config: freshclam_config,
       run_on_start: run_on_start,
-      fingerprint: compute_fingerprint(database_path)
+      fingerprint: compute_fingerprint(database_path),
+      update_task_ref: nil
     }
 
     if run_on_start do
@@ -210,9 +217,10 @@ defmodule ExClamav.DefinitionUpdater do
 
   @impl true
   def handle_continue(:initial_update, state) do
-    new_state = perform_update(state)
-    timer_ref = schedule_update(new_state.interval_ms)
-    {:noreply, %{new_state | timer_ref: timer_ref}}
+    # Kick off freshclam asynchronously so the GenServer remains responsive
+    # for subscribe/status calls from other processes (e.g., ClamavGenServer).
+    new_state = start_async_update(state)
+    {:noreply, new_state}
   end
 
   @impl true
@@ -246,28 +254,80 @@ defmodule ExClamav.DefinitionUpdater do
       subscriber_count: map_size(state.subscribers),
       last_update_at: state.last_update_at,
       last_result: state.last_result,
-      fingerprint: state.fingerprint
+      fingerprint: state.fingerprint,
+      updating: state.update_task_ref != nil
     }
 
     {:reply, status, state}
   end
 
+  def handle_call(:update_now, _from, state) do
+    if state.update_task_ref != nil do
+      {:reply, :already_updating, state}
+    else
+      cancel_timer(state.timer_ref)
+      new_state = start_async_update(%{state | timer_ref: nil})
+      {:reply, :ok, new_state}
+    end
+  end
+
   @impl true
-  def handle_cast(:update_now, state) do
-    cancel_timer(state.timer_ref)
-    new_state = perform_update(state)
-    timer_ref = schedule_update(new_state.interval_ms)
-    {:noreply, %{new_state | timer_ref: timer_ref}}
+  def handle_cast(_msg, state) do
+    {:noreply, state}
   end
 
   @impl true
   def handle_info(:tick, state) do
-    new_state = perform_update(state)
+    if state.update_task_ref != nil do
+      # An update is already running; skip this tick and reschedule.
+      Logger.debug("DefinitionUpdater: skipping tick — update already in progress")
+      timer_ref = schedule_update(state.interval_ms)
+      {:noreply, %{state | timer_ref: timer_ref}}
+    else
+      new_state = start_async_update(state)
+      {:noreply, new_state}
+    end
+  end
+
+  def handle_info({ref, freshclam_result}, %__MODULE__{update_task_ref: ref} = state)
+      when is_reference(ref) do
+    # The async Task completed. Flush the :DOWN message so we don't handle it twice.
+    Process.demonitor(ref, [:flush])
+
+    new_state = handle_freshclam_result(freshclam_result, state)
+
+    # Schedule the next periodic update
     timer_ref = schedule_update(new_state.interval_ms)
-    {:noreply, %{new_state | timer_ref: timer_ref}}
+    {:noreply, %{new_state | timer_ref: timer_ref, update_task_ref: nil}}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %__MODULE__{update_task_ref: ref} = state) do
+    # The async freshclam Task crashed.
+    Logger.error("DefinitionUpdater: freshclam task crashed — #{inspect(reason)}")
+    now = DateTime.utc_now()
+
+    metadata = %{
+      database_path: state.database_path,
+      reason: "freshclam task crashed: #{inspect(reason)}",
+      updated_at: now
+    }
+
+    broadcast(state.subscribers, {:clamav_definition_update_failed, metadata})
+
+    timer_ref = schedule_update(state.interval_ms)
+
+    {:noreply,
+     %{
+       state
+       | update_task_ref: nil,
+         timer_ref: timer_ref,
+         last_update_at: now,
+         last_result: {:error, "task crashed: #{inspect(reason)}"}
+     }}
   end
 
   def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    # A subscriber process went down.
     case Map.pop(state.subscribers, pid) do
       {^ref, new_subscribers} ->
         Logger.debug("DefinitionUpdater: subscriber #{inspect(pid)} went down, removing")
@@ -282,13 +342,52 @@ defmodule ExClamav.DefinitionUpdater do
     {:noreply, state}
   end
 
-  # ── Internal ───────────────────────────────────────────────────────────────
+  # ── Internal: Async Update ────────────────────────────────────────────────
 
-  defp perform_update(state) do
+  defp start_async_update(state) do
     Logger.info("DefinitionUpdater: running freshclam update for #{state.database_path}")
+
+    # Capture the values we need in the Task closure (don't capture the whole state).
+    freshclam_path = state.freshclam_path
+    freshclam_config = state.freshclam_config
+    database_path = state.database_path
+
+    task =
+      Task.async(fn ->
+        run_freshclam_in_task(freshclam_path, freshclam_config, database_path)
+      end)
+
+    %{state | update_task_ref: task.ref}
+  end
+
+  defp run_freshclam_in_task(nil, _freshclam_config, _database_path) do
+    {:error, "freshclam binary not found. Install ClamAV or set :freshclam_path"}
+  end
+
+  defp run_freshclam_in_task(freshclam_path, freshclam_config, database_path) do
+    args = build_freshclam_args(freshclam_config, database_path)
+
+    Logger.debug("DefinitionUpdater: executing #{freshclam_path} #{Enum.join(args, " ")}")
+
+    try do
+      case System.cmd(freshclam_path, args, stderr_to_stdout: true) do
+        {output, 0} ->
+          Logger.debug("DefinitionUpdater: freshclam output:\n#{output}")
+          :ok
+
+        {output, exit_code} ->
+          {:error, "freshclam exited with code #{exit_code}: #{String.trim(output)}"}
+      end
+    rescue
+      e in ErlangError ->
+        {:error, "failed to execute freshclam: #{inspect(e)}"}
+    end
+  end
+
+  defp handle_freshclam_result(freshclam_result, state) do
     previous_fingerprint = state.fingerprint
 
-    case run_freshclam(state) do
+    case freshclam_result do
       :ok ->
         new_fingerprint = compute_fingerprint(state.database_path)
         now = DateTime.utc_now()
@@ -327,36 +426,14 @@ defmodule ExClamav.DefinitionUpdater do
     end
   end
 
-  defp run_freshclam(%__MODULE__{freshclam_path: nil}) do
-    {:error, "freshclam binary not found. Install ClamAV or set :freshclam_path"}
-  end
+  # ── Internal: Helpers ─────────────────────────────────────────────────────
 
-  defp run_freshclam(%__MODULE__{} = state) do
-    args = build_freshclam_args(state)
-
-    Logger.debug("DefinitionUpdater: executing #{state.freshclam_path} #{Enum.join(args, " ")}")
-
-    try do
-      case System.cmd(state.freshclam_path, args, stderr_to_stdout: true) do
-        {output, 0} ->
-          Logger.debug("DefinitionUpdater: freshclam output:\n#{output}")
-          :ok
-
-        {output, exit_code} ->
-          {:error, "freshclam exited with code #{exit_code}: #{String.trim(output)}"}
-      end
-    rescue
-      e in ErlangError ->
-        {:error, "failed to execute freshclam: #{inspect(e)}"}
-    end
-  end
-
-  defp build_freshclam_args(state) do
-    args = ["--datadir=#{state.database_path}"]
+  defp build_freshclam_args(freshclam_config, database_path) do
+    args = ["--datadir=#{database_path}"]
 
     args =
-      if state.freshclam_config do
-        ["--config-file=#{state.freshclam_config}" | args]
+      if freshclam_config do
+        ["--config-file=#{freshclam_config}" | args]
       else
         args
       end
