@@ -1,0 +1,39 @@
+{{- if and .Values.persistence.uploads.enabled (not .Values.persistence.uploads.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ex-clamav-server.fullname" . }}-uploads
+  labels:
+    {{- include "ex-clamav-server.labels" . | nindent 4 }}
+  {{- with .Values.persistence.uploads.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.uploads.accessModes | nindent 4 }}
+  storageClassName: {{ .Values.persistence.uploads.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.uploads.size }}
+{{- end }}
+---
+{{- if and .Values.persistence.clamavDb.enabled (not .Values.persistence.clamavDb.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ex-clamav-server.fullname" . }}-clamav-db
+  labels:
+    {{- include "ex-clamav-server.labels" . | nindent 4 }}
+  {{- with .Values.persistence.clamavDb.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.persistence.clamavDb.accessModes | nindent 4 }}
+  storageClassName: {{ .Values.persistence.clamavDb.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.clamavDb.size }}
+{{- end }}

@@ -1,0 +1,22 @@
+apiVersion: v2
+name: ex-clamav-server
+description: A scalable REST API server for virus scanning powered by ExClamav
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - clamav
+  - antivirus
+  - virus-scanning
+  - elixir
+  - file-upload
+maintainers:
+  - name: ExClamav Team
+home: https://github.com/csokun/ex_clamav
+sources:
+  - https://github.com/csokun/ex_clamav
+dependencies:
+  - name: postgresql
+    version: "16.4.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

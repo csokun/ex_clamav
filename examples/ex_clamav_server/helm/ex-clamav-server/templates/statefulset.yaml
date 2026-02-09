@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "ex-clamav-server.fullname" . }}
+  labels:
+    {{- include "ex-clamav-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  serviceName: {{ include "ex-clamav-server.fullname" . }}-headless
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "ex-clamav-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "ex-clamav-server.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ex-clamav-server.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.initContainers.freshclam.enabled }}
+      initContainers:
+        - name: init-freshclam
+          image: "{{ .Values.initContainers.freshclam.image.repository }}:{{ .Values.initContainers.freshclam.image.tag }}"
+          imagePullPolicy: {{ .Values.initContainers.freshclam.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              count=$(find {{ .Values.config.clamavDbPath }} -maxdepth 1 \( -name '*.cvd' -o -name '*.cld' \) 2>/dev/null | wc -l)
+              if [ "$count" -eq 0 ]; then
+                echo "No virus definitions found. Downloading..."
+                freshclam --datadir={{ .Values.config.clamavDbPath }} --no-dns
+              else
+                echo "Virus definitions already present ($count files). Skipping."
+              fi
+          volumeMounts:
+            - name: clamav-db
+              mountPath: {{ .Values.config.clamavDbPath }}
+          resources:
+            {{- toYaml .Values.initContainers.freshclam.resources | nindent 12 }}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "ex-clamav-server.fullname" . }}-config
+            {{- if .Values.existingDatabaseSecret }}
+            - secretRef:
+                name: {{ .Values.existingDatabaseSecret }}
+            {{- else }}
+            - secretRef:
+                name: {{ include "ex-clamav-server.fullname" . }}-db-secret
+            {{- end }}
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.persistence.uploads.enabled }}
+            - name: uploads
+              mountPath: {{ .Values.persistence.uploads.mountPath }}
+            {{- end }}
+            {{- if .Values.persistence.clamavDb.enabled }}
+            - name: clamav-db
+              mountPath: {{ .Values.persistence.clamavDb.mountPath }}
+            {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.persistence.uploads.enabled }}
+        - name: uploads
+          {{- if .Values.persistence.uploads.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.uploads.existingClaim }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "ex-clamav-server.fullname" . }}-uploads
+          {{- end }}
+        {{- end }}
+        {{- if .Values.persistence.clamavDb.enabled }}
+        - name: clamav-db
+          {{- if .Values.persistence.clamavDb.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.clamavDb.existingClaim }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "ex-clamav-server.fullname" . }}-clamav-db
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
