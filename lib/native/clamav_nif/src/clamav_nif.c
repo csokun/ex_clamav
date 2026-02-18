@@ -412,7 +412,17 @@ static ERL_NIF_TERM get_database_version_nif(ErlNifEnv* env, int argc, const ERL
 static ErlNifFunc nif_funcs[] = {
     {"init", 1, init_nif, 0},
     {"engine_new", 0, engine_new_nif, 0},
-    {"engine_free", 1, engine_free_nif, 0},
+    /*
+     * engine_free must run on a dirty CPU scheduler.
+     *
+     * cl_engine_free() walks and frees every compiled signature tree for
+     * all loaded databases (potentially millions of nodes).  On a real
+     * database (~3.6 M signatures) this takes tens to hundreds of
+     * milliseconds.  Running it on a normal scheduler thread would block
+     * the entire BEAM scheduler for that duration, causing latency spikes
+     * for every process sharing that scheduler.
+     */
+    {"engine_free", 1, engine_free_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     {"load_database", 2, load_database_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"compile_engine", 1, compile_engine_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
     {"scan_file", 2, scan_file_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},

@@ -87,6 +87,73 @@ ExClamav.Engine.get_database_version(engine)
 ExClamav.Engine.free(engine)
 ```
 
+## Development
+
+### Checking for memory leaks
+
+The project includes a Mix task that compiles a standalone C harness and runs
+it under [Valgrind](https://valgrind.org/) `memcheck` to verify that the
+ClamAV NIF has no memory leaks.
+
+**Prerequisites**
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install valgrind
+
+# macOS (via Homebrew — requires Rosetta on Apple Silicon)
+brew install valgrind
+```
+
+**Run the check**
+
+```bash
+mix valgrind
+```
+
+**Options**
+
+| Flag | Effect |
+|---|---|
+| `--rebuild` | Force recompile of the harness even if it is up-to-date |
+| `--verbose` | Echo each shell command before running it |
+| `--output FILE` | Write the full Valgrind log to a file |
+| `--show-suppressions` | Tell Valgrind to list every active suppression |
+
+**Examples**
+
+```bash
+# Force recompile and save the full log
+mix valgrind --rebuild --output /tmp/valgrind.log
+
+# Verbose mode — see every command that is run
+mix valgrind --verbose
+```
+
+The task exits with status `1` if Valgrind reports any errors, making it
+suitable for use in CI pipelines.
+
+The harness (`tmp/nif_leak_fast.c`) exercises every engine lifecycle path
+without loading the full virus database, so it completes in seconds even
+under Valgrind:
+
+- Normal lifecycle: `engine_new → engine_free → GC (no-op)`
+- GC-only lifecycle: `engine_new → destructor`
+- Double-free guard: `engine_free` called twice
+- Load-database failure path
+- Scan-after-free guard (NULL check)
+- `fmap` lifecycle: `open → scan_callback → close`
+- Multiple engines all explicitly freed
+- Mixed: half explicit-free, half GC-only
+
+A clean run reports:
+
+```
+✓ PASS – no memory leaks detected
+```
+
+---
+
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/ex_clamav>.

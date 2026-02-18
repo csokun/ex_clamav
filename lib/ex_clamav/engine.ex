@@ -46,14 +46,17 @@ defmodule ExClamav.Engine do
   Compile the engine after loading the database.
   """
   @spec compile(t()) :: :ok | {:error, String.t()}
-  def compile(%__MODULE__{ref: ref} = engine) do
+  def compile(%__MODULE__{ref: ref}) do
     case call_nif(:compile_engine, [ref]) do
       :ok ->
         :ok
 
       {:error, _reason} = error ->
-        # Free the engine memory on failure
-        free(engine)
+        # Return the error; the caller is responsible for freeing the engine.
+        # initialize_engine/2 and any other callers already handle cleanup in
+        # their error paths, so calling free/1 here would cause a redundant
+        # double-free (the second call becomes a no-op due to the NULL guard in
+        # engine_free_nif, but it obscures ownership semantics).
         error
     end
   end
