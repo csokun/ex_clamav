@@ -413,12 +413,12 @@ static ErlNifFunc nif_funcs[] = {
     {"init", 1, init_nif, 0},
     {"engine_new", 0, engine_new_nif, 0},
     {"engine_free", 1, engine_free_nif, 0},
-    {"load_database", 2, load_database_nif, 0},
-    {"compile_engine", 1, compile_engine_nif, 0},
-    {"scan_file", 2, scan_file_nif, 0},
-    {"scan_file", 3, scan_file_nif, 0},
-    {"scan_buffer", 2, scan_buffer_nif, 0},
-    {"scan_buffer", 3, scan_buffer_nif, 0},
+    {"load_database", 2, load_database_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"compile_engine", 1, compile_engine_nif, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"scan_file", 2, scan_file_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"scan_file", 3, scan_file_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"scan_buffer", 2, scan_buffer_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"scan_buffer", 3, scan_buffer_nif, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"get_version", 0, get_version_nif, 0},
     {"get_database_version", 1, get_database_version_nif, 0}
 };
